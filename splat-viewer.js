@@ -27,7 +27,7 @@ export class SplatViewer {
             // Scene source (either direct URLs or API)
             plyUrl: null,
             placeholderImage: null,
-            sceneId: null,                    // SHARP API scene ID
+            sceneId: null,
             apiBaseUrl: 'http://localhost:8000',
             
             // Display options
@@ -40,19 +40,20 @@ export class SplatViewer {
             perspectiveIntensity: 0.5,
             
             // Memory management
-            memoryThresholdMB: 512,           // Fall back to image if memory exceeds this
-            memoryCheckInterval: 2000,        // Check memory every N ms
+            memoryThresholdMB: 512,
+            memoryCheckInterval: 2000,
             
             // Callbacks
             onLoad: null,
             onError: null,
             onProgress: null,
-            onFallback: null,                 // Called when falling back to image mode
+            onFallback: null,
             ...options
         };
 
         this.viewer = null;
         this.isLoaded = false;
+        this.isLoading = false;
         this.isFallbackMode = false;
         this._orbitSpeed = 0.01;
         this._panSpeed = 0.1;
@@ -74,7 +75,7 @@ export class SplatViewer {
         this._fallbackImage = null;
         this._memoryCheckTimer = null;
         
-        // Resolved URLs (from API or direct)
+        // Resolved URLs
         this._imageUrl = null;
         this._plyUrl = null;
     }
@@ -101,21 +102,21 @@ export class SplatViewer {
         this.container.style.position = 'relative';
         this.container.style.overflow = 'hidden';
         
+        // Outer container for perspective
         this._placeholder = document.createElement('div');
         this._placeholder.className = 'splat-placeholder';
         this._placeholder.style.cssText = `
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: -5%;
+            left: -5%;
+            width: 110%;
+            height: 110%;
             background-image: url('${this._imageUrl}');
             background-size: cover;
             background-position: center;
             z-index: 10;
-            transition: opacity ${this.options.transitionDuration}ms ease-out,
-                        transform ${this.options.transitionDuration}ms ease-out,
-                        filter ${this.options.transitionDuration}ms ease-out;
+            transition: transform 0.1s ease-out;
+            will-change: transform;
         `;
         
         this.container.appendChild(this._placeholder);
@@ -142,12 +143,40 @@ export class SplatViewer {
         this.container.appendChild(this._fallbackImage);
     }
 
+    _applyPlaceholderPerspective() {
+        if (!this._placeholder) return;
+        
+        const { x, y } = this._currentPerspective;
+        const intensity = this.options.perspectiveIntensity * 10;
+        
+        const translateX = x * intensity * 2;
+        const translateY = y * intensity * 2;
+        const rotateY = x * intensity * 0.5;
+        const rotateX = -y * intensity * 0.5;
+        const scale = 1 + Math.abs(x * 0.02) + Math.abs(y * 0.02);
+        
+        this._placeholder.style.transform = `
+            perspective(1000px)
+            translateX(${translateX}px)
+            translateY(${translateY}px)
+            rotateY(${rotateY}deg)
+            rotateX(${rotateX}deg)
+            scale(${scale})
+        `;
+    }
+
     _revealSplat() {
         if (!this._placeholder) return;
         
+        // Fade out with blur
+        this._placeholder.style.transition = `
+            opacity ${this.options.transitionDuration}ms ease-out,
+            transform ${this.options.transitionDuration}ms ease-out,
+            filter ${this.options.transitionDuration}ms ease-out
+        `;
         this._placeholder.style.opacity = '0';
-        this._placeholder.style.transform = 'scale(1.05)';
         this._placeholder.style.filter = 'blur(10px)';
+        this._placeholder.style.transform = 'scale(1.05)';
         
         setTimeout(() => {
             if (this._placeholder?.parentNode) {
@@ -161,17 +190,16 @@ export class SplatViewer {
         if (performance.memory) {
             return performance.memory.usedJSHeapSize / (1024 * 1024);
         }
-        // Fallback estimation based on device
         return null;
     }
 
     _startMemoryMonitoring() {
-        if (!performance.memory) return; // Only works in Chrome
+        if (!performance.memory) return;
         
         this._memoryCheckTimer = setInterval(() => {
             const memoryMB = this._getMemoryUsageMB();
             if (memoryMB && memoryMB > this.options.memoryThresholdMB) {
-                console.warn(`Memory usage high (${memoryMB.toFixed(0)}MB), switching to fallback mode`);
+                console.warn(`Memory high (${memoryMB.toFixed(0)}MB), switching to fallback`);
                 this._activateFallbackMode();
             }
         }, this.options.memoryCheckInterval);
@@ -190,23 +218,18 @@ export class SplatViewer {
         this.isFallbackMode = true;
         this._stopMemoryMonitoring();
         
-        // Dispose 3D viewer to free memory
         if (this.viewer) {
             this.viewer.dispose();
             this.viewer = null;
         }
         
-        // Show fallback image
         if (this._fallbackImage) {
             this._fallbackImage.style.opacity = '1';
         }
         
-        // Apply current perspective to fallback
         this._applyFallbackPerspective();
         
-        if (this.options.onFallback) {
-            this.options.onFallback();
-        }
+        if (this.options.onFallback) this.options.onFallback();
     }
 
     _applyFallbackPerspective() {
@@ -215,7 +238,6 @@ export class SplatViewer {
         const { x, y } = this._currentPerspective;
         const intensity = this.options.perspectiveIntensity * 10;
         
-        // CSS transform for parallax effect on the image
         const translateX = x * intensity * 2;
         const translateY = y * intensity * 2;
         const rotateY = x * intensity * 0.5;
@@ -233,6 +255,8 @@ export class SplatViewer {
     }
 
     async load(plyUrl = null) {
+        this.isLoading = true;
+        
         try {
             // Resolve URLs from API if sceneId provided
             if (this.options.sceneId) {
@@ -244,7 +268,7 @@ export class SplatViewer {
             
             if (!this._plyUrl) throw new Error('No PLY URL provided');
             
-            // Setup placeholder and fallback images
+            // Setup images (parallax works during loading!)
             if (this._imageUrl) {
                 this._setupPlaceholder();
                 this._setupFallbackImage();
@@ -282,6 +306,7 @@ export class SplatViewer {
 
             this.viewer.start();
             this.isLoaded = true;
+            this.isLoading = false;
             
             if (this.camera) {
                 this._initialCameraPosition = [
@@ -291,7 +316,6 @@ export class SplatViewer {
                 ];
             }
 
-            // Start memory monitoring
             this._startMemoryMonitoring();
 
             requestAnimationFrame(() => this._revealSplat());
@@ -300,6 +324,7 @@ export class SplatViewer {
             
             return this;
         } catch (err) {
+            this.isLoading = false;
             if (this.options.onError) this.options.onError(err);
             throw err;
         }
@@ -324,11 +349,19 @@ export class SplatViewer {
     perspective(offsetX, offsetY, offsetZ = 0) {
         this._currentPerspective = { x: offsetX, y: offsetY };
         
+        // Apply to placeholder during loading
+        if (this.isLoading && this._placeholder) {
+            this._applyPlaceholderPerspective();
+            return this;
+        }
+        
+        // Apply to fallback image
         if (this.isFallbackMode) {
             this._applyFallbackPerspective();
             return this;
         }
         
+        // Apply to 3D camera
         if (!this.camera) return this;
         
         const intensity = this.options.perspectiveIntensity;
@@ -372,7 +405,8 @@ export class SplatViewer {
 
     _setupDeviceMotion() {
         this._deviceMotionHandler = (event) => {
-            if (!this.isLoaded && !this.isFallbackMode) return;
+            // Works during loading, loaded, and fallback states
+            if (!this.isLoading && !this.isLoaded && !this.isFallbackMode) return;
             
             const { beta, gamma } = event;
             if (beta === null || gamma === null) return;
@@ -412,7 +446,7 @@ export class SplatViewer {
     }
 
     pan(deltaX, deltaY) {
-        if (this.isFallbackMode) return this;
+        if (this.isFallbackMode || this.isLoading) return this;
         if (!this.camera) return this;
         this._initialCameraPosition[0] -= deltaX * this._panSpeed;
         this._initialCameraPosition[1] += deltaY * this._panSpeed;
@@ -421,7 +455,7 @@ export class SplatViewer {
     }
 
     rotate(deltaYaw, deltaPitch) {
-        if (this.isFallbackMode) return this;
+        if (this.isFallbackMode || this.isLoading) return this;
         if (!this.viewer?.controls) return this;
         const controls = this.viewer.controls;
         if (controls?.rotateLeft && controls?.rotateUp) {
@@ -433,7 +467,7 @@ export class SplatViewer {
     }
 
     zoom(delta) {
-        if (this.isFallbackMode) return this;
+        if (this.isFallbackMode || this.isLoading) return this;
         if (!this.camera) return this;
         this._initialCameraPosition[2] += delta * this._zoomSpeed;
         this.camera.position.set(...this._initialCameraPosition);
@@ -442,6 +476,11 @@ export class SplatViewer {
 
     reset() {
         this._currentPerspective = { x: 0, y: 0 };
+        
+        if (this.isLoading && this._placeholder) {
+            this._applyPlaceholderPerspective();
+            return this;
+        }
         
         if (this.isFallbackMode) {
             this._applyFallbackPerspective();
@@ -464,7 +503,6 @@ export class SplatViewer {
         return this;
     }
 
-    // Force fallback mode (useful for testing or low-end devices)
     forceFallback() {
         this._activateFallbackMode();
         return this;
@@ -485,6 +523,7 @@ export class SplatViewer {
             this.viewer = null;
         }
         this.isLoaded = false;
+        this.isLoading = false;
         this.isFallbackMode = false;
     }
 }
