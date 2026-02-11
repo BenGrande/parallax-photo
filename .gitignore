@@ -1,0 +1,14 @@
+# Scene files (user data)
+*.ply
+*.splat
+*.jpg
+*.jpeg
+*.png
+
+# OS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
