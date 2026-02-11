@@ -2,10 +2,11 @@
  * SplatViewer - Lightweight 3D Gaussian Splat Viewer
  * 
  * Usage:
- *   const viewer = new SplatViewer('#container', { plyUrl: 'scene.ply' });
+ *   const viewer = new SplatViewer('#container', {
+ *     plyUrl: 'scene.ply',
+ *     placeholderImage: 'photo.jpg'  // Shows until splat loads
+ *   });
  *   await viewer.load();
- *   viewer.perspective(0.02, -0.01);  // Subtle parallax shift
- *   viewer.enableDeviceMotion();       // Auto-parallax from gyroscope
  */
 
 import * as GaussianSplats3D from 'https://esm.sh/@mkkellogg/gaussian-splats-3d@0.4.7';
@@ -18,12 +19,14 @@ export class SplatViewer {
         
         this.options = {
             plyUrl: null,
+            placeholderImage: null,      // Image to show while loading
+            transitionDuration: 1200,    // ms for fade transition
             cameraPosition: [0, 0, 0],
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
             enableControls: true,
-            perspectiveIntensity: 0.5,  // How much device motion affects view
+            perspectiveIntensity: 0.5,
             onLoad: null,
             onError: null,
             onProgress: null,
@@ -42,9 +45,61 @@ export class SplatViewer {
         this._baseOrientation = { alpha: 0, beta: 0, gamma: 0 };
         this._hasBaseOrientation = false;
         
-        // Store initial camera state for perspective shifts
+        // Store initial camera state
         this._initialCameraPosition = [...this.options.cameraPosition];
         this._initialCameraLookAt = [...this.options.cameraLookAt];
+        
+        // Placeholder elements
+        this._placeholder = null;
+        this._viewerCanvas = null;
+        
+        // Setup placeholder if provided
+        if (this.options.placeholderImage) {
+            this._setupPlaceholder();
+        }
+    }
+
+    _setupPlaceholder() {
+        // Style the container
+        this.container.style.position = 'relative';
+        this.container.style.overflow = 'hidden';
+        
+        // Create placeholder image
+        this._placeholder = document.createElement('div');
+        this._placeholder.className = 'splat-placeholder';
+        this._placeholder.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('${this.options.placeholderImage}');
+            background-size: cover;
+            background-position: center;
+            z-index: 10;
+            transition: opacity ${this.options.transitionDuration}ms ease-out,
+                        transform ${this.options.transitionDuration}ms ease-out,
+                        filter ${this.options.transitionDuration}ms ease-out;
+        `;
+        
+        this.container.appendChild(this._placeholder);
+    }
+
+    _revealSplat() {
+        if (!this._placeholder) return;
+        
+        // Animate placeholder out with a nice effect
+        this._placeholder.style.opacity = '0';
+        this._placeholder.style.transform = 'scale(1.05)';
+        this._placeholder.style.filter = 'blur(10px)';
+        
+        // Remove placeholder after animation
+        setTimeout(() => {
+            if (this._placeholder && this._placeholder.parentNode) {
+                this._placeholder.parentNode.removeChild(this._placeholder);
+                this._placeholder = null;
+            }
+        }, this.options.transitionDuration);
     }
 
     async load(plyUrl = null) {
@@ -94,6 +149,11 @@ export class SplatViewer {
                 ];
             }
 
+            // Reveal splat with animation
+            requestAnimationFrame(() => {
+                this._revealSplat();
+            });
+
             if (this.options.onLoad) this.options.onLoad();
             
             return this;
@@ -121,26 +181,18 @@ export class SplatViewer {
 
     /**
      * Subtle perspective shift - like moving your head slightly
-     * Creates a parallax effect without changing where you're looking
-     * 
-     * @param {number} offsetX - Horizontal offset (-1 to 1, subtle values like 0.02)
-     * @param {number} offsetY - Vertical offset (-1 to 1, subtle values like 0.02)
-     * @param {number} offsetZ - Depth offset (optional, for lean in/out)
      */
     perspective(offsetX, offsetY, offsetZ = 0) {
         if (!this.camera) return this;
         
         const intensity = this.options.perspectiveIntensity;
         
-        // Apply subtle offset to camera position
-        // This shifts the viewpoint while keeping the look-at target the same
         this.camera.position.set(
             this._initialCameraPosition[0] + (offsetX * intensity),
             this._initialCameraPosition[1] + (offsetY * intensity),
             this._initialCameraPosition[2] + (offsetZ * intensity * 0.5)
         );
         
-        // Keep looking at the same point - this creates the parallax effect
         this.camera.lookAt(
             this._initialCameraLookAt[0],
             this._initialCameraLookAt[1],
@@ -150,23 +202,14 @@ export class SplatViewer {
         return this;
     }
 
-    /**
-     * Set the intensity of perspective shifts
-     * @param {number} intensity - Multiplier for perspective offsets (default 0.5)
-     */
     setPerspectiveIntensity(intensity) {
         this.options.perspectiveIntensity = intensity;
         return this;
     }
 
-    /**
-     * Enable device motion (gyroscope) for automatic parallax effect
-     * When user tilts their device, the view subtly shifts
-     */
     enableDeviceMotion() {
         if (this._deviceMotionEnabled) return this;
         
-        // Request permission on iOS 13+
         if (typeof DeviceOrientationEvent !== 'undefined' && 
             typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission()
@@ -190,25 +233,20 @@ export class SplatViewer {
             const { alpha, beta, gamma } = event;
             if (alpha === null || beta === null || gamma === null) return;
             
-            // Capture base orientation on first reading
             if (!this._hasBaseOrientation) {
                 this._baseOrientation = { alpha, beta, gamma };
                 this._hasBaseOrientation = true;
                 return;
             }
             
-            // Calculate delta from base orientation
-            // beta = front-back tilt (-180 to 180), gamma = left-right tilt (-90 to 90)
             let deltaBeta = beta - this._baseOrientation.beta;
             let deltaGamma = gamma - this._baseOrientation.gamma;
             
-            // Normalize and clamp
             deltaBeta = Math.max(-30, Math.min(30, deltaBeta));
             deltaGamma = Math.max(-30, Math.min(30, deltaGamma));
             
-            // Convert to subtle offset (-1 to 1 range, but usually much smaller)
-            const offsetX = (deltaGamma / 30) * 0.3;  // Left-right tilt
-            const offsetY = (deltaBeta / 30) * 0.3;   // Front-back tilt
+            const offsetX = (deltaGamma / 30) * 0.3;
+            const offsetY = (deltaBeta / 30) * 0.3;
             
             this.perspective(offsetX, offsetY);
         };
@@ -217,9 +255,6 @@ export class SplatViewer {
         this._deviceMotionEnabled = true;
     }
 
-    /**
-     * Disable device motion tracking
-     */
     disableDeviceMotion() {
         if (this._deviceMotionHandler) {
             window.removeEventListener('deviceorientation', this._deviceMotionHandler);
@@ -230,9 +265,6 @@ export class SplatViewer {
         return this;
     }
 
-    /**
-     * Recalibrate device motion (set current orientation as neutral)
-     */
     calibrateDeviceMotion() {
         this._hasBaseOrientation = false;
         return this;
@@ -259,7 +291,6 @@ export class SplatViewer {
 
     zoom(delta) {
         if (!this.camera) return this;
-        const direction = { x: 0, y: 0, z: 1 };
         this._initialCameraPosition[2] += delta * this._zoomSpeed;
         this.camera.position.set(...this._initialCameraPosition);
         return this;
@@ -284,6 +315,9 @@ export class SplatViewer {
 
     dispose() {
         this.disableDeviceMotion();
+        if (this._placeholder && this._placeholder.parentNode) {
+            this._placeholder.parentNode.removeChild(this._placeholder);
+        }
         if (this.viewer) {
             this.viewer.dispose();
             this.viewer = null;

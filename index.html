@@ -17,20 +17,29 @@
             padding: 15px 20px;
             border-radius: 10px;
             z-index: 100;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        #info.visible {
+            opacity: 1;
+            transform: translateY(0);
         }
         #progress {
             position: fixed;
-            top: 50%;
+            bottom: 30px;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translateX(-50%);
             color: #fff;
-            font-size: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 30px 50px;
-            border-radius: 15px;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 12px 24px;
+            border-radius: 20px;
             z-index: 200;
-            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.5s ease;
         }
+        #progress.hidden { opacity: 0; pointer-events: none; }
         #controls {
             position: fixed;
             bottom: 20px;
@@ -40,7 +49,10 @@
             background: rgba(0,0,0,0.7);
             padding: 10px 15px;
             border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.5s ease 0.3s;
         }
+        #controls.visible { opacity: 1; }
         #motionBtn {
             position: fixed;
             top: 20px;
@@ -53,19 +65,25 @@
             font-size: 14px;
             cursor: pointer;
             z-index: 100;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.5s ease, transform 0.5s ease, background 0.2s ease;
+        }
+        #motionBtn.visible {
+            opacity: 1;
+            transform: translateY(0);
         }
         #motionBtn:hover { background: rgba(53, 122, 189, 0.9); }
         #motionBtn.active { background: rgba(76, 175, 80, 0.9); }
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div id="viewer"></div>
     <div id="info">💑 3D Photo</div>
-    <div id="progress">Loading...</div>
+    <div id="progress">Loading 3D scene...</div>
     <div id="controls">
         Drag to orbit • Scroll to zoom<br>
-        <small>R = reset • Tilt device for parallax</small>
+        <small>Tilt device for parallax</small>
     </div>
     <button id="motionBtn">📱 Enable Motion</button>
     
@@ -74,21 +92,34 @@
 
         const progress = document.getElementById('progress');
         const motionBtn = document.getElementById('motionBtn');
+        const info = document.getElementById('info');
+        const controls = document.getElementById('controls');
         
-        // Initialize viewer
+        // Initialize viewer with placeholder image
         const viewer = new SplatViewer('#viewer', {
             plyUrl: 'couple_clean.ply',
+            placeholderImage: 'couple.jpg',  // Shows the photo while loading
+            transitionDuration: 1500,        // Smooth 1.5s transition
             cameraPosition: [0, 0, 0],
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
-            perspectiveIntensity: 0.8,  // Adjust for more/less parallax
+            perspectiveIntensity: 0.8,
             onProgress: (pct) => {
-                progress.textContent = `Loading: ${Math.round(pct)}%`;
+                progress.textContent = `Loading 3D scene... ${Math.round(pct)}%`;
             },
             onLoad: () => {
+                // Fade out progress
                 progress.classList.add('hidden');
-                console.log('Splat loaded! Tilt your device for 3D parallax effect.');
+                
+                // Fade in UI elements
+                setTimeout(() => {
+                    info.classList.add('visible');
+                    motionBtn.classList.add('visible');
+                    controls.classList.add('visible');
+                }, 800);
+                
+                console.log('✨ 3D scene loaded! Tilt your device or move mouse for parallax.');
             },
             onError: (err) => {
                 progress.textContent = `Error: ${err.message}`;
@@ -97,11 +128,10 @@
 
         viewer.load();
 
-        // Motion toggle button
+        // Motion toggle
         let motionEnabled = false;
         motionBtn.addEventListener('click', async () => {
             if (!motionEnabled) {
-                // Request permission (needed for iOS)
                 if (typeof DeviceOrientationEvent !== 'undefined' && 
                     typeof DeviceOrientationEvent.requestPermission === 'function') {
                     try {
@@ -131,44 +161,22 @@
         // Keyboard controls
         document.addEventListener('keydown', (e) => {
             switch(e.key.toLowerCase()) {
-                case 'r':
-                    viewer.reset();
-                    break;
-                case 'arrowleft':
-                    viewer.perspective(-0.1, 0);
-                    break;
-                case 'arrowright':
-                    viewer.perspective(0.1, 0);
-                    break;
-                case 'arrowup':
-                    viewer.perspective(0, -0.1);
-                    break;
-                case 'arrowdown':
-                    viewer.perspective(0, 0.1);
-                    break;
+                case 'r': viewer.reset(); break;
             }
         });
 
-        // Mouse parallax for desktop (subtle effect on mouse move)
-        let mouseParallaxEnabled = true;
+        // Mouse parallax for desktop
         document.addEventListener('mousemove', (e) => {
-            if (!mouseParallaxEnabled || !viewer.isLoaded) return;
-            
-            // Only apply if not dragging (no mouse button pressed)
-            if (e.buttons !== 0) return;
+            if (!viewer.isLoaded || e.buttons !== 0) return;
             
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
-            
-            // Calculate offset from center (-1 to 1)
             const offsetX = (e.clientX - centerX) / centerX;
             const offsetY = (e.clientY - centerY) / centerY;
             
-            // Apply very subtle parallax
             viewer.perspective(offsetX * 0.15, offsetY * 0.15);
         });
 
-        // Expose for console
         window.splatViewer = viewer;
     </script>
 </body>
