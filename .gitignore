@@ -5,6 +5,10 @@
 *.jpeg
 *.png
 
+# But include default demo files
+!default.ply
+!default.jpg
+
 # OS
 .DS_Store
 
