@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>Splat Viewer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,6 +29,7 @@
             padding: 30px 50px;
             border-radius: 15px;
             z-index: 200;
+            text-align: center;
         }
         #controls {
             position: fixed;
@@ -40,45 +41,92 @@
             padding: 10px 15px;
             border-radius: 8px;
         }
+        #motionBtn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(74, 144, 217, 0.9);
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #motionBtn:hover { background: rgba(53, 122, 189, 0.9); }
+        #motionBtn.active { background: rgba(76, 175, 80, 0.9); }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div id="viewer"></div>
-    <div id="info">💑 Couple 3DGS</div>
+    <div id="info">💑 3D Photo</div>
     <div id="progress">Loading...</div>
     <div id="controls">
-        Drag to orbit • Scroll to zoom • Right-drag to pan<br>
-        <small>R = reset view</small>
+        Drag to orbit • Scroll to zoom<br>
+        <small>R = reset • Tilt device for parallax</small>
     </div>
+    <button id="motionBtn">📱 Enable Motion</button>
     
     <script type="module">
         import { SplatViewer } from './splat-viewer.js';
 
         const progress = document.getElementById('progress');
+        const motionBtn = document.getElementById('motionBtn');
         
-        // Initialize viewer with PLY URL
+        // Initialize viewer
         const viewer = new SplatViewer('#viewer', {
             plyUrl: 'couple_clean.ply',
             cameraPosition: [0, 0, 0],
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
+            perspectiveIntensity: 0.8,  // Adjust for more/less parallax
             onProgress: (pct) => {
                 progress.textContent = `Loading: ${Math.round(pct)}%`;
             },
             onLoad: () => {
                 progress.classList.add('hidden');
-                console.log('Splat loaded!');
+                console.log('Splat loaded! Tilt your device for 3D parallax effect.');
             },
             onError: (err) => {
                 progress.textContent = `Error: ${err.message}`;
-                console.error(err);
             }
         });
 
-        // Load the scene
         viewer.load();
+
+        // Motion toggle button
+        let motionEnabled = false;
+        motionBtn.addEventListener('click', async () => {
+            if (!motionEnabled) {
+                // Request permission (needed for iOS)
+                if (typeof DeviceOrientationEvent !== 'undefined' && 
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const permission = await DeviceOrientationEvent.requestPermission();
+                        if (permission !== 'granted') {
+                            alert('Motion permission denied');
+                            return;
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
+                
+                viewer.enableDeviceMotion();
+                motionBtn.textContent = '✓ Motion Active';
+                motionBtn.classList.add('active');
+                motionEnabled = true;
+            } else {
+                viewer.disableDeviceMotion();
+                viewer.reset();
+                motionBtn.textContent = '📱 Enable Motion';
+                motionBtn.classList.remove('active');
+                motionEnabled = false;
+            }
+        });
 
         // Keyboard controls
         document.addEventListener('keydown', (e) => {
@@ -87,21 +135,40 @@
                     viewer.reset();
                     break;
                 case 'arrowleft':
-                    viewer.pan(-5, 0);
+                    viewer.perspective(-0.1, 0);
                     break;
                 case 'arrowright':
-                    viewer.pan(5, 0);
+                    viewer.perspective(0.1, 0);
                     break;
                 case 'arrowup':
-                    viewer.zoom(2);
+                    viewer.perspective(0, -0.1);
                     break;
                 case 'arrowdown':
-                    viewer.zoom(-2);
+                    viewer.perspective(0, 0.1);
                     break;
             }
         });
 
-        // Expose viewer globally for console access
+        // Mouse parallax for desktop (subtle effect on mouse move)
+        let mouseParallaxEnabled = true;
+        document.addEventListener('mousemove', (e) => {
+            if (!mouseParallaxEnabled || !viewer.isLoaded) return;
+            
+            // Only apply if not dragging (no mouse button pressed)
+            if (e.buttons !== 0) return;
+            
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            
+            // Calculate offset from center (-1 to 1)
+            const offsetX = (e.clientX - centerX) / centerX;
+            const offsetY = (e.clientY - centerY) / centerY;
+            
+            // Apply very subtle parallax
+            viewer.perspective(offsetX * 0.15, offsetY * 0.15);
+        });
+
+        // Expose for console
         window.splatViewer = viewer;
     </script>
 </body>
