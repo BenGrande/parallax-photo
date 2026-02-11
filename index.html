@@ -85,8 +85,8 @@
             memoryThresholdMB: 400,
         } : {
             // Direct file mode (default demo)
-            plyUrl: 'couple_clean.ply',
-            placeholderImage: 'couple.jpg',
+            plyUrl: 'sunset_clean.ply',
+            placeholderImage: 'sunset.jpg',
         };
         
         const viewer = new SplatViewer('#viewer', {
@@ -108,11 +108,11 @@
                 }, 800);
             },
             onFallback: () => {
-                // Update UI to show fallback mode
                 info.textContent = '📷 2D Mode (low memory)';
                 info.classList.add('fallback');
+                info.classList.add('visible');
+                motionBtn.classList.add('visible');
                 controls.innerHTML = 'Tilt device for parallax<br><small>3D disabled to save memory</small>';
-                console.log('Switched to fallback image mode');
             },
             onError: (err) => {
                 console.error('Load error:', err);

@@ -48,6 +48,11 @@ export class SplatViewer {
             onError: null,
             onProgress: null,
             onFallback: null,
+            
+            // Built-in loading bar
+            showLoadingBar: true,
+            loadingBarColor: '#4a90d9',
+            loadingBarHeight: '3px',
             ...options
         };
 
@@ -73,6 +78,7 @@ export class SplatViewer {
         // Elements
         this._placeholder = null;
         this._fallbackImage = null;
+        this._loadingBar = null;
         this._memoryCheckTimer = null;
         
         // Resolved URLs
@@ -120,6 +126,24 @@ export class SplatViewer {
         `;
         
         this.container.appendChild(this._placeholder);
+        
+        // Loading bar
+        if (this.options.showLoadingBar) {
+            this._loadingBar = document.createElement('div');
+            this._loadingBar.className = 'splat-loading-bar';
+            this._loadingBar.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 0%;
+                height: ${this.options.loadingBarHeight};
+                background: ${this.options.loadingBarColor};
+                z-index: 100;
+                transition: width 0.2s ease-out, opacity 0.3s ease;
+                box-shadow: 0 0 10px ${this.options.loadingBarColor};
+            `;
+            this.container.appendChild(this._loadingBar);
+        }
     }
 
     _setupFallbackImage() {
@@ -227,6 +251,17 @@ export class SplatViewer {
             this._fallbackImage.style.opacity = '1';
         }
         
+        // Hide loading bar
+        if (this._loadingBar) {
+            this._loadingBar.style.opacity = '0';
+            setTimeout(() => {
+                if (this._loadingBar?.parentNode) {
+                    this._loadingBar.parentNode.removeChild(this._loadingBar);
+                    this._loadingBar = null;
+                }
+            }, 300);
+        }
+        
         this._applyFallbackPerspective();
         
         if (this.options.onFallback) this.options.onFallback();
@@ -295,6 +330,9 @@ export class SplatViewer {
                 showLoadingUI: false,
                 progressiveLoad: false,
                 onProgress: (pct) => {
+                    if (this._loadingBar) {
+                        this._loadingBar.style.width = `${pct}%`;
+                    }
                     if (this.options.onProgress) this.options.onProgress(pct);
                 }
             });
@@ -319,6 +357,20 @@ export class SplatViewer {
             this._startMemoryMonitoring();
 
             requestAnimationFrame(() => this._revealSplat());
+
+            // Hide loading bar
+            if (this._loadingBar) {
+                this._loadingBar.style.width = '100%';
+                setTimeout(() => {
+                    this._loadingBar.style.opacity = '0';
+                    setTimeout(() => {
+                        if (this._loadingBar?.parentNode) {
+                            this._loadingBar.parentNode.removeChild(this._loadingBar);
+                            this._loadingBar = null;
+                        }
+                    }, 300);
+                }, 200);
+            }
 
             if (this.options.onLoad) this.options.onLoad();
             
