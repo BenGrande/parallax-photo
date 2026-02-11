@@ -2,11 +2,17 @@
  * SplatViewer - Lightweight 3D Gaussian Splat Viewer
  * 
  * Usage:
+ *   // With direct URLs
  *   const viewer = new SplatViewer('#container', {
  *     plyUrl: 'scene.ply',
- *     placeholderImage: 'photo.jpg'  // Shows until splat loads
+ *     placeholderImage: 'photo.jpg'
  *   });
- *   await viewer.load();
+ * 
+ *   // With SHARP API scene ID
+ *   const viewer = new SplatViewer('#container', {
+ *     sceneId: '2729990f-aa9e-42b9-9ce8-facc5ee616e8',
+ *     apiBaseUrl: 'http://localhost:8000'
+ *   });
  */
 
 import * as GaussianSplats3D from 'https://esm.sh/@mkkellogg/gaussian-splats-3d@0.4.7';
@@ -18,23 +24,36 @@ export class SplatViewer {
             : container;
         
         this.options = {
+            // Scene source (either direct URLs or API)
             plyUrl: null,
-            placeholderImage: null,      // Image to show while loading
-            transitionDuration: 1200,    // ms for fade transition
+            placeholderImage: null,
+            sceneId: null,                    // SHARP API scene ID
+            apiBaseUrl: 'http://localhost:8000',
+            
+            // Display options
+            transitionDuration: 1200,
             cameraPosition: [0, 0, 0],
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
             enableControls: true,
             perspectiveIntensity: 0.5,
+            
+            // Memory management
+            memoryThresholdMB: 512,           // Fall back to image if memory exceeds this
+            memoryCheckInterval: 2000,        // Check memory every N ms
+            
+            // Callbacks
             onLoad: null,
             onError: null,
             onProgress: null,
+            onFallback: null,                 // Called when falling back to image mode
             ...options
         };
 
         this.viewer = null;
         this.isLoaded = false;
+        this.isFallbackMode = false;
         this._orbitSpeed = 0.01;
         this._panSpeed = 0.1;
         this._zoomSpeed = 1;
@@ -45,26 +64,43 @@ export class SplatViewer {
         this._baseOrientation = { alpha: 0, beta: 0, gamma: 0 };
         this._hasBaseOrientation = false;
         
-        // Store initial camera state
+        // Camera state
         this._initialCameraPosition = [...this.options.cameraPosition];
         this._initialCameraLookAt = [...this.options.cameraLookAt];
+        this._currentPerspective = { x: 0, y: 0 };
         
-        // Placeholder elements
+        // Elements
         this._placeholder = null;
-        this._viewerCanvas = null;
+        this._fallbackImage = null;
+        this._memoryCheckTimer = null;
         
-        // Setup placeholder if provided
-        if (this.options.placeholderImage) {
-            this._setupPlaceholder();
+        // Resolved URLs (from API or direct)
+        this._imageUrl = null;
+        this._plyUrl = null;
+    }
+
+    async _fetchSceneFromAPI() {
+        if (!this.options.sceneId) return;
+        
+        const response = await fetch(`${this.options.apiBaseUrl}/scenes/${this.options.sceneId}`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch scene: ${response.statusText}`);
         }
+        
+        const scene = await response.json();
+        
+        if (scene.status !== 'completed') {
+            throw new Error(`Scene not ready: ${scene.status}`);
+        }
+        
+        this._imageUrl = scene.image_url;
+        this._plyUrl = scene.ply_url;
     }
 
     _setupPlaceholder() {
-        // Style the container
         this.container.style.position = 'relative';
         this.container.style.overflow = 'hidden';
         
-        // Create placeholder image
         this._placeholder = document.createElement('div');
         this._placeholder.className = 'splat-placeholder';
         this._placeholder.style.cssText = `
@@ -73,7 +109,7 @@ export class SplatViewer {
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('${this.options.placeholderImage}');
+            background-image: url('${this._imageUrl}');
             background-size: cover;
             background-position: center;
             z-index: 10;
@@ -85,28 +121,136 @@ export class SplatViewer {
         this.container.appendChild(this._placeholder);
     }
 
+    _setupFallbackImage() {
+        this._fallbackImage = document.createElement('div');
+        this._fallbackImage.className = 'splat-fallback';
+        this._fallbackImage.style.cssText = `
+            position: absolute;
+            top: -5%;
+            left: -5%;
+            width: 110%;
+            height: 110%;
+            background-image: url('${this._imageUrl}');
+            background-size: cover;
+            background-position: center;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.1s ease-out;
+            will-change: transform;
+        `;
+        
+        this.container.appendChild(this._fallbackImage);
+    }
+
     _revealSplat() {
         if (!this._placeholder) return;
         
-        // Animate placeholder out with a nice effect
         this._placeholder.style.opacity = '0';
         this._placeholder.style.transform = 'scale(1.05)';
         this._placeholder.style.filter = 'blur(10px)';
         
-        // Remove placeholder after animation
         setTimeout(() => {
-            if (this._placeholder && this._placeholder.parentNode) {
+            if (this._placeholder?.parentNode) {
                 this._placeholder.parentNode.removeChild(this._placeholder);
                 this._placeholder = null;
             }
         }, this.options.transitionDuration);
     }
 
-    async load(plyUrl = null) {
-        const url = plyUrl || this.options.plyUrl;
-        if (!url) throw new Error('No PLY URL provided');
+    _getMemoryUsageMB() {
+        if (performance.memory) {
+            return performance.memory.usedJSHeapSize / (1024 * 1024);
+        }
+        // Fallback estimation based on device
+        return null;
+    }
 
+    _startMemoryMonitoring() {
+        if (!performance.memory) return; // Only works in Chrome
+        
+        this._memoryCheckTimer = setInterval(() => {
+            const memoryMB = this._getMemoryUsageMB();
+            if (memoryMB && memoryMB > this.options.memoryThresholdMB) {
+                console.warn(`Memory usage high (${memoryMB.toFixed(0)}MB), switching to fallback mode`);
+                this._activateFallbackMode();
+            }
+        }, this.options.memoryCheckInterval);
+    }
+
+    _stopMemoryMonitoring() {
+        if (this._memoryCheckTimer) {
+            clearInterval(this._memoryCheckTimer);
+            this._memoryCheckTimer = null;
+        }
+    }
+
+    _activateFallbackMode() {
+        if (this.isFallbackMode) return;
+        
+        this.isFallbackMode = true;
+        this._stopMemoryMonitoring();
+        
+        // Dispose 3D viewer to free memory
+        if (this.viewer) {
+            this.viewer.dispose();
+            this.viewer = null;
+        }
+        
+        // Show fallback image
+        if (this._fallbackImage) {
+            this._fallbackImage.style.opacity = '1';
+        }
+        
+        // Apply current perspective to fallback
+        this._applyFallbackPerspective();
+        
+        if (this.options.onFallback) {
+            this.options.onFallback();
+        }
+    }
+
+    _applyFallbackPerspective() {
+        if (!this._fallbackImage) return;
+        
+        const { x, y } = this._currentPerspective;
+        const intensity = this.options.perspectiveIntensity * 10;
+        
+        // CSS transform for parallax effect on the image
+        const translateX = x * intensity * 2;
+        const translateY = y * intensity * 2;
+        const rotateY = x * intensity * 0.5;
+        const rotateX = -y * intensity * 0.5;
+        const scale = 1 + Math.abs(x * 0.02) + Math.abs(y * 0.02);
+        
+        this._fallbackImage.style.transform = `
+            perspective(1000px)
+            translateX(${translateX}px)
+            translateY(${translateY}px)
+            rotateY(${rotateY}deg)
+            rotateX(${rotateX}deg)
+            scale(${scale})
+        `;
+    }
+
+    async load(plyUrl = null) {
         try {
+            // Resolve URLs from API if sceneId provided
+            if (this.options.sceneId) {
+                await this._fetchSceneFromAPI();
+            } else {
+                this._imageUrl = this.options.placeholderImage;
+                this._plyUrl = plyUrl || this.options.plyUrl;
+            }
+            
+            if (!this._plyUrl) throw new Error('No PLY URL provided');
+            
+            // Setup placeholder and fallback images
+            if (this._imageUrl) {
+                this._setupPlaceholder();
+                this._setupFallbackImage();
+            }
+            
+            // Create 3D viewer
             this.viewer = new GaussianSplats3D.Viewer({
                 rootElement: this.container,
                 cameraUp: this.options.cameraUp,
@@ -122,7 +266,7 @@ export class SplatViewer {
                 halfPrecisionCovariancesOnGPU: true
             });
 
-            await this.viewer.addSplatScene(url, {
+            await this.viewer.addSplatScene(this._plyUrl, {
                 splatAlphaRemovalThreshold: 1,
                 showLoadingUI: false,
                 progressiveLoad: false,
@@ -131,7 +275,6 @@ export class SplatViewer {
                 }
             });
 
-            // Set FOV
             if (this.viewer.camera) {
                 this.viewer.camera.fov = this.options.fov;
                 this.viewer.camera.updateProjectionMatrix();
@@ -140,7 +283,6 @@ export class SplatViewer {
             this.viewer.start();
             this.isLoaded = true;
             
-            // Store actual initial state
             if (this.camera) {
                 this._initialCameraPosition = [
                     this.camera.position.x,
@@ -149,10 +291,10 @@ export class SplatViewer {
                 ];
             }
 
-            // Reveal splat with animation
-            requestAnimationFrame(() => {
-                this._revealSplat();
-            });
+            // Start memory monitoring
+            this._startMemoryMonitoring();
+
+            requestAnimationFrame(() => this._revealSplat());
 
             if (this.options.onLoad) this.options.onLoad();
             
@@ -179,10 +321,14 @@ export class SplatViewer {
         return this;
     }
 
-    /**
-     * Subtle perspective shift - like moving your head slightly
-     */
     perspective(offsetX, offsetY, offsetZ = 0) {
+        this._currentPerspective = { x: offsetX, y: offsetY };
+        
+        if (this.isFallbackMode) {
+            this._applyFallbackPerspective();
+            return this;
+        }
+        
         if (!this.camera) return this;
         
         const intensity = this.options.perspectiveIntensity;
@@ -214,9 +360,7 @@ export class SplatViewer {
             typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission()
                 .then(response => {
-                    if (response === 'granted') {
-                        this._setupDeviceMotion();
-                    }
+                    if (response === 'granted') this._setupDeviceMotion();
                 })
                 .catch(console.error);
         } else {
@@ -228,22 +372,19 @@ export class SplatViewer {
 
     _setupDeviceMotion() {
         this._deviceMotionHandler = (event) => {
-            if (!this.isLoaded) return;
+            if (!this.isLoaded && !this.isFallbackMode) return;
             
-            const { alpha, beta, gamma } = event;
-            if (alpha === null || beta === null || gamma === null) return;
+            const { beta, gamma } = event;
+            if (beta === null || gamma === null) return;
             
             if (!this._hasBaseOrientation) {
-                this._baseOrientation = { alpha, beta, gamma };
+                this._baseOrientation = { beta, gamma };
                 this._hasBaseOrientation = true;
                 return;
             }
             
-            let deltaBeta = beta - this._baseOrientation.beta;
-            let deltaGamma = gamma - this._baseOrientation.gamma;
-            
-            deltaBeta = Math.max(-30, Math.min(30, deltaBeta));
-            deltaGamma = Math.max(-30, Math.min(30, deltaGamma));
+            let deltaBeta = Math.max(-30, Math.min(30, beta - this._baseOrientation.beta));
+            let deltaGamma = Math.max(-30, Math.min(30, gamma - this._baseOrientation.gamma));
             
             const offsetX = (deltaGamma / 30) * 0.3;
             const offsetY = (deltaBeta / 30) * 0.3;
@@ -271,6 +412,7 @@ export class SplatViewer {
     }
 
     pan(deltaX, deltaY) {
+        if (this.isFallbackMode) return this;
         if (!this.camera) return this;
         this._initialCameraPosition[0] -= deltaX * this._panSpeed;
         this._initialCameraPosition[1] += deltaY * this._panSpeed;
@@ -279,9 +421,10 @@ export class SplatViewer {
     }
 
     rotate(deltaYaw, deltaPitch) {
+        if (this.isFallbackMode) return this;
         if (!this.viewer?.controls) return this;
         const controls = this.viewer.controls;
-        if (controls && controls.rotateLeft && controls.rotateUp) {
+        if (controls?.rotateLeft && controls?.rotateUp) {
             controls.rotateLeft(deltaYaw * this._orbitSpeed);
             controls.rotateUp(deltaPitch * this._orbitSpeed);
             controls.update();
@@ -290,6 +433,7 @@ export class SplatViewer {
     }
 
     zoom(delta) {
+        if (this.isFallbackMode) return this;
         if (!this.camera) return this;
         this._initialCameraPosition[2] += delta * this._zoomSpeed;
         this.camera.position.set(...this._initialCameraPosition);
@@ -297,6 +441,13 @@ export class SplatViewer {
     }
 
     reset() {
+        this._currentPerspective = { x: 0, y: 0 };
+        
+        if (this.isFallbackMode) {
+            this._applyFallbackPerspective();
+            return this;
+        }
+        
         if (!this.camera) return this;
         this._initialCameraPosition = [...this.options.cameraPosition];
         this._initialCameraLookAt = [...this.options.cameraLookAt];
@@ -313,16 +464,28 @@ export class SplatViewer {
         return this;
     }
 
+    // Force fallback mode (useful for testing or low-end devices)
+    forceFallback() {
+        this._activateFallbackMode();
+        return this;
+    }
+
     dispose() {
+        this._stopMemoryMonitoring();
         this.disableDeviceMotion();
-        if (this._placeholder && this._placeholder.parentNode) {
+        
+        if (this._placeholder?.parentNode) {
             this._placeholder.parentNode.removeChild(this._placeholder);
+        }
+        if (this._fallbackImage?.parentNode) {
+            this._fallbackImage.parentNode.removeChild(this._fallbackImage);
         }
         if (this.viewer) {
             this.viewer.dispose();
             this.viewer = null;
         }
         this.isLoaded = false;
+        this.isFallbackMode = false;
     }
 }
 

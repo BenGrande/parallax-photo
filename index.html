@@ -21,10 +21,8 @@
             transform: translateY(-10px);
             transition: opacity 0.5s ease, transform 0.5s ease;
         }
-        #info.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        #info.visible { opacity: 1; transform: translateY(0); }
+        #info.fallback { background: rgba(255,150,0,0.8); }
         #controls {
             position: fixed;
             bottom: 20px;
@@ -54,10 +52,7 @@
             transform: translateY(-10px);
             transition: opacity 0.5s ease, transform 0.5s ease, background 0.2s ease;
         }
-        #motionBtn.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        #motionBtn.visible { opacity: 1; transform: translateY(0); }
         #motionBtn:hover { background: rgba(53, 122, 189, 0.9); }
         #motionBtn.active { background: rgba(76, 175, 80, 0.9); }
     </style>
@@ -78,30 +73,51 @@
         const info = document.getElementById('info');
         const controls = document.getElementById('controls');
         
-        // Initialize viewer with placeholder image
-        const viewer = new SplatViewer('#viewer', {
+        // Get scene ID from URL params, or use direct files
+        const params = new URLSearchParams(window.location.search);
+        const sceneId = params.get('scene');
+        
+        // Configure viewer
+        const viewerOptions = sceneId ? {
+            // Load from SHARP API
+            sceneId: sceneId,
+            apiBaseUrl: 'http://localhost:8000',
+            memoryThresholdMB: 400,
+        } : {
+            // Direct file mode (default demo)
             plyUrl: 'couple_clean.ply',
             placeholderImage: 'couple.jpg',
+        };
+        
+        const viewer = new SplatViewer('#viewer', {
+            ...viewerOptions,
             transitionDuration: 1500,
             cameraPosition: [0, 0, 0],
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
             perspectiveIntensity: 0.8,
-            // Optional: implement your own progress handler
-            onProgress: (percent) => {
-                console.log(`Loading: ${Math.round(percent)}%`);
+            onProgress: (pct) => {
+                console.log(`Loading: ${Math.round(pct)}%`);
             },
             onLoad: () => {
-                // Show UI after load
                 setTimeout(() => {
                     info.classList.add('visible');
                     motionBtn.classList.add('visible');
                     controls.classList.add('visible');
                 }, 800);
             },
+            onFallback: () => {
+                // Update UI to show fallback mode
+                info.textContent = '📷 2D Mode (low memory)';
+                info.classList.add('fallback');
+                controls.innerHTML = 'Tilt device for parallax<br><small>3D disabled to save memory</small>';
+                console.log('Switched to fallback image mode');
+            },
             onError: (err) => {
                 console.error('Load error:', err);
+                info.textContent = '❌ Error loading';
+                info.classList.add('visible');
             }
         });
 
@@ -111,14 +127,12 @@
         let motionEnabled = false;
         motionBtn.addEventListener('click', async () => {
             if (!motionEnabled) {
-                if (typeof DeviceOrientationEvent !== 'undefined' && 
-                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
                     try {
                         const permission = await DeviceOrientationEvent.requestPermission();
                         if (permission !== 'granted') return;
                     } catch (e) {}
                 }
-                
                 viewer.enableDeviceMotion();
                 motionBtn.textContent = '✓ Motion Active';
                 motionBtn.classList.add('active');
@@ -135,16 +149,22 @@
         // Keyboard
         document.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'r') viewer.reset();
+            if (e.key.toLowerCase() === 'f') viewer.forceFallback(); // Test fallback
         });
 
         // Mouse parallax
         document.addEventListener('mousemove', (e) => {
-            if (!viewer.isLoaded || e.buttons !== 0) return;
+            if ((!viewer.isLoaded && !viewer.isFallbackMode) || e.buttons !== 0) return;
             const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
             viewer.perspective((e.clientX - cx) / cx * 0.15, (e.clientY - cy) / cy * 0.15);
         });
 
         window.splatViewer = viewer;
+        
+        // Log usage
+        console.log(sceneId 
+            ? `Loading scene from API: ${sceneId}` 
+            : 'Loading local files. Use ?scene=ID to load from API');
     </script>
 </body>
 </html>
