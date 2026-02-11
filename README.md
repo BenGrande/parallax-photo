@@ -4,11 +4,12 @@ A lightweight JavaScript library for viewing 3D Gaussian Splats with parallax ef
 
 ## Features
 
-- 📦 Zero-config CDN import
+- 📦 Zero-config CDN import with built-in demo
 - 🖼️ Placeholder image with smooth transition
 - 📱 Device motion parallax (gyroscope)
 - 🖱️ Mouse parallax for desktop
 - 🎮 Pan, rotate, zoom controls
+- 📊 Built-in loading bar
 - ⚡ Built on [@mkkellogg/gaussian-splats-3d](https://github.com/mkkellogg/GaussianSplats3D)
 
 ## Installation
@@ -17,7 +18,7 @@ A lightweight JavaScript library for viewing 3D Gaussian Splats with parallax ef
 
 ```html
 <script type="module">
-  import { SplatViewer } from 'https://cdn.jsdelivr.net/gh/USERNAME/REPO@VERSION/splat-viewer.js';
+  import { SplatViewer } from 'https://cdn.jsdelivr.net/gh/BenGrande/parallax-photo@main/splat-viewer.js';
 </script>
 ```
 
@@ -30,6 +31,18 @@ A lightweight JavaScript library for viewing 3D Gaussian Splats with parallax ef
 ```
 
 ## Quick Start
+
+### Zero-Config Demo
+
+```javascript
+import { SplatViewer } from 'https://cdn.jsdelivr.net/gh/BenGrande/parallax-photo@main/splat-viewer.js';
+
+// No options = loads built-in demo scene
+const viewer = new SplatViewer('#container');
+await viewer.load();
+```
+
+### Custom Scene
 
 ```javascript
 import { SplatViewer } from './splat-viewer.js';
@@ -55,8 +68,12 @@ await viewer.load();
 | `fov` | number | 48.5 | Field of view (degrees) |
 | `enableControls` | boolean | true | Enable orbit controls |
 | `perspectiveIntensity` | number | 0.5 | Parallax effect strength |
+| `showLoadingBar` | boolean | true | Show built-in loading progress bar |
+| `loadingBarColor` | string | '#4a90d9' | Loading bar color |
+| `loadingBarHeight` | string | '3px' | Loading bar height |
 | `onProgress` | function | null | Loading progress callback (percent) |
 | `onLoad` | function | null | Called when splat is loaded |
+| `onFallback` | function | null | Called when switching to 2D fallback |
 | `onError` | function | null | Called on error |
 
 ## Methods
@@ -64,8 +81,10 @@ await viewer.load();
 ### Loading
 
 ```javascript
-// Load splat (uses plyUrl from options, or pass URL)
+// Load splat (uses plyUrl from options, or defaults to demo)
 await viewer.load();
+
+// Load specific URL
 await viewer.load('other-scene.ply');
 ```
 
@@ -115,24 +134,20 @@ viewer.getCameraPosition(); // returns [x, y, z]
 viewer.setSpeed(orbit, pan, zoom);
 ```
 
+### Fallback Mode
+
+```javascript
+// Force 2D fallback mode (for low-memory devices)
+viewer.forceFallback();
+
+// Check mode
+viewer.isFallbackMode; // boolean
+```
+
 ### Cleanup
 
 ```javascript
 viewer.dispose();
-```
-
-## Custom Progress Loader
-
-```javascript
-const viewer = new SplatViewer('#container', {
-  plyUrl: 'scene.ply',
-  onProgress: (percent) => {
-    document.querySelector('.progress-bar').style.width = `${percent}%`;
-  },
-  onLoad: () => {
-    document.querySelector('.loader').remove();
-  }
-});
 ```
 
 ## Device Motion Example
@@ -178,6 +193,11 @@ Use [Apple's SHARP](https://github.com/apple/ml-sharp) to generate 3D Gaussian S
 ```bash
 sharp predict --input-path photo.jpg --output-path output/ --device mps
 ```
+
+## Default Demo Scene
+
+The built-in demo uses a foggy mountain photo:
+- **Photo by [v2osk](https://unsplash.com/@v2osk) on [Unsplash](https://unsplash.com/photos/foggy-mountain-summit-1Z2niiBPg5A)**
 
 ## License
 

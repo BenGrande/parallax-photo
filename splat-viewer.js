@@ -23,12 +23,19 @@ export class SplatViewer {
             ? document.querySelector(container) 
             : container;
         
+        // Default demo scene via CDN
+        const CDN_BASE = 'https://cdn.jsdelivr.net/gh/BenGrande/parallax-photo@main';
+        
         this.options = {
             // Scene source (either direct URLs or API)
             plyUrl: null,
             placeholderImage: null,
             sceneId: null,
             apiBaseUrl: 'http://localhost:8000',
+            
+            // Default demo (used when no plyUrl/sceneId provided)
+            defaultPlyUrl: `${CDN_BASE}/default.ply`,
+            defaultPlaceholder: `${CDN_BASE}/default.jpg`,
             
             // Display options
             transitionDuration: 1200,
@@ -301,7 +308,11 @@ export class SplatViewer {
                 this._plyUrl = plyUrl || this.options.plyUrl;
             }
             
-            if (!this._plyUrl) throw new Error('No PLY URL provided');
+            // Fall back to default demo scene if nothing provided
+            if (!this._plyUrl) {
+                this._plyUrl = this.options.defaultPlyUrl;
+                this._imageUrl = this._imageUrl || this.options.defaultPlaceholder;
+            }
             
             // Setup images (parallax works during loading!)
             if (this._imageUrl) {
