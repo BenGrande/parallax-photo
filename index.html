@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Splat Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: system-ui, sans-serif; }
+        #viewer { width: 100vw; height: 100vh; }
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            background: rgba(0,0,0,0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            z-index: 100;
+        }
+        #progress {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 30px 50px;
+            border-radius: 15px;
+            z-index: 200;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #aaa;
+            font-size: 12px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 15px;
+            border-radius: 8px;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="viewer"></div>
+    <div id="info">💑 Couple 3DGS</div>
+    <div id="progress">Loading...</div>
+    <div id="controls">
+        Drag to orbit • Scroll to zoom • Right-drag to pan<br>
+        <small>R = reset view</small>
+    </div>
+    
+    <script type="module">
+        import { SplatViewer } from './splat-viewer.js';
+
+        const progress = document.getElementById('progress');
+        
+        // Initialize viewer with PLY URL
+        const viewer = new SplatViewer('#viewer', {
+            plyUrl: 'couple_clean.ply',
+            cameraPosition: [0, 0, 0],
+            cameraLookAt: [0, 0, 50],
+            cameraUp: [0, -1, 0],
+            fov: 48.5,
+            onProgress: (pct) => {
+                progress.textContent = `Loading: ${Math.round(pct)}%`;
+            },
+            onLoad: () => {
+                progress.classList.add('hidden');
+                console.log('Splat loaded!');
+            },
+            onError: (err) => {
+                progress.textContent = `Error: ${err.message}`;
+                console.error(err);
+            }
+        });
+
+        // Load the scene
+        viewer.load();
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key.toLowerCase()) {
+                case 'r':
+                    viewer.reset();
+                    break;
+                case 'arrowleft':
+                    viewer.pan(-5, 0);
+                    break;
+                case 'arrowright':
+                    viewer.pan(5, 0);
+                    break;
+                case 'arrowup':
+                    viewer.zoom(2);
+                    break;
+                case 'arrowdown':
+                    viewer.zoom(-2);
+                    break;
+            }
+        });
+
+        // Expose viewer globally for console access
+        window.splatViewer = viewer;
+    </script>
+</body>
+</html>
