@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test Splat</title>
+    <style>
+        body { margin: 0; background: #333; }
+        #viewer { width: 100vw; height: 100vh; }
+        #status { position: fixed; top: 10px; left: 10px; color: lime; font-family: monospace; background: rgba(0,0,0,0.8); padding: 10px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <div id="viewer"></div>
+    <div id="status">Loading...</div>
+    
+    <script type="module">
+        import * as GaussianSplats3D from 'https://esm.sh/@mkkellogg/gaussian-splats-3d@0.4.7';
+        
+        const status = document.getElementById('status');
+        
+        try {
+            status.textContent = 'Creating viewer...';
+            
+            const viewer = new GaussianSplats3D.Viewer({
+                rootElement: document.getElementById('viewer'),
+                cameraUp: [0, -1, 0],
+                initialCameraPosition: [0, 0, 0],
+                initialCameraLookAt: [0, 0, 50],
+                selfDrivenMode: true,
+                useBuiltInControls: true,
+            });
+            
+            status.textContent = 'Loading PLY...';
+            
+            await viewer.addSplatScene('couple_clean.ply', {
+                showLoadingUI: true,
+                progressiveLoad: true,
+                onProgress: (pct) => {
+                    status.textContent = `Loading: ${Math.round(pct * 100)}%`;
+                }
+            });
+            
+            status.textContent = 'Done!';
+            
+        } catch (err) {
+            status.textContent = 'Error: ' + err.message;
+            status.style.color = 'red';
+            console.error(err);
+        }
+    </script>
+</body>
+</html>
