@@ -17,7 +17,8 @@
     "url": "https://github.com/BenGrande/parallax-photo.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "license": "MIT",
   "peerDependencies": {
