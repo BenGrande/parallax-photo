@@ -43,7 +43,6 @@ export class SplatViewer {
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
-            enableControls: true,
             perspectiveIntensity: 0.5,
             
             // Memory management
@@ -67,7 +66,6 @@ export class SplatViewer {
         this.isLoaded = false;
         this.isLoading = false;
         this.isFallbackMode = false;
-        this._orbitSpeed = 0.01;
         this._panSpeed = 0.1;
         this._zoomSpeed = 1;
         
@@ -327,7 +325,7 @@ export class SplatViewer {
                 initialCameraPosition: this.options.cameraPosition,
                 initialCameraLookAt: this.options.cameraLookAt,
                 selfDrivenMode: true,
-                useBuiltInControls: true,
+                useBuiltInControls: false,
                 sharedMemoryForWorkers: false,
                 dynamicScene: false,
                 antialiased: false,
@@ -517,18 +515,6 @@ export class SplatViewer {
         return this;
     }
 
-    rotate(deltaYaw, deltaPitch) {
-        if (this.isFallbackMode || this.isLoading) return this;
-        if (!this.viewer?.controls) return this;
-        const controls = this.viewer.controls;
-        if (controls?.rotateLeft && controls?.rotateUp) {
-            controls.rotateLeft(deltaYaw * this._orbitSpeed);
-            controls.rotateUp(deltaPitch * this._orbitSpeed);
-            controls.update();
-        }
-        return this;
-    }
-
     zoom(delta) {
         if (this.isFallbackMode || this.isLoading) return this;
         if (!this.camera) return this;
@@ -559,8 +545,7 @@ export class SplatViewer {
         return this;
     }
 
-    setSpeed(orbit = 0.01, pan = 0.1, zoom = 1) {
-        this._orbitSpeed = orbit;
+    setSpeed(pan = 0.1, zoom = 1) {
         this._panSpeed = pan;
         this._zoomSpeed = zoom;
         return this;
