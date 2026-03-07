@@ -66,7 +66,7 @@ await viewer.load();
 | `cameraLookAt` | array | [0,0,50] | Camera look-at target [x,y,z] |
 | `cameraUp` | array | [0,-1,0] | Camera up vector |
 | `fov` | number | 48.5 | Field of view (degrees) |
-| `enableControls` | boolean | true | Enable orbit controls |
+| `enableControls` | boolean | true | Enable built-in orbit controls (set true, then call disableControls() after load for head-tracking-only setups) |
 | `perspectiveIntensity` | number | 0.5 | Parallax effect strength |
 | `showLoadingBar` | boolean | true | Show built-in loading progress bar |
 | `loadingBarColor` | string | '#4a90d9' | Loading bar color |
@@ -132,6 +132,13 @@ viewer.getCameraPosition(); // returns [x, y, z]
 
 // Adjust control speeds
 viewer.setSpeed(orbit, pan, zoom);
+```
+
+### Disable Controls
+
+```javascript
+// After loading, remove all keyboard/mouse handlers (for head-tracking-only setups)
+viewer.disableControls();
 ```
 
 ### Fallback Mode

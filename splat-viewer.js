@@ -43,6 +43,7 @@ export class SplatViewer {
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
             fov: 48.5,
+            enableControls: true,
             perspectiveIntensity: 0.5,
             
             // Memory management
@@ -110,8 +111,14 @@ export class SplatViewer {
     }
 
     _setupPlaceholder() {
-        this.container.style.position = 'relative';
-        this.container.style.overflow = 'hidden';
+        // Only set position if not already positioned by the caller
+        const computed = window.getComputedStyle(this.container);
+        if (computed.position === 'static') {
+            this.container.style.position = 'relative';
+        }
+        if (computed.overflow === 'visible') {
+            this.container.style.overflow = 'hidden';
+        }
         
         // Outer container for perspective
         this._placeholder = document.createElement('div');
@@ -325,7 +332,7 @@ export class SplatViewer {
                 initialCameraPosition: this.options.cameraPosition,
                 initialCameraLookAt: this.options.cameraLookAt,
                 selfDrivenMode: true,
-                useBuiltInControls: false,
+                useBuiltInControls: this.options.enableControls,
                 sharedMemoryForWorkers: false,
                 dynamicScene: false,
                 antialiased: false,
@@ -548,6 +555,16 @@ export class SplatViewer {
     setSpeed(pan = 0.1, zoom = 1) {
         this._panSpeed = pan;
         this._zoomSpeed = zoom;
+        return this;
+    }
+
+    disableControls() {
+        if (!this.viewer) return this;
+        if (this.viewer.removeEventHandlers) this.viewer.removeEventHandlers();
+        if (this.viewer.controls) {
+            this.viewer.controls.enabled = false;
+            this.viewer.controls.dispose();
+        }
         return this;
     }
 
