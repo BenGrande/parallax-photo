@@ -1,0 +1,26 @@
+{
+  "name": "@bengrande/parallax-photo",
+  "version": "1.0.0",
+  "description": "Lightweight 3D Gaussian Splat viewer with parallax, head-tracking, and device motion support",
+  "main": "splat-viewer.js",
+  "module": "splat-viewer.js",
+  "exports": {
+    ".": "./splat-viewer.js",
+    "./workers/*": "./workers/*"
+  },
+  "files": [
+    "splat-viewer.js",
+    "workers/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BenGrande/parallax-photo.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@mkkellogg/gaussian-splats-3d": "^0.4.7"
+  }
+}
