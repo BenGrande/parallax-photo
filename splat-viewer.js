@@ -327,7 +327,7 @@ export class SplatViewer {
                 initialCameraPosition: this.options.cameraPosition,
                 initialCameraLookAt: this.options.cameraLookAt,
                 selfDrivenMode: true,
-                useBuiltInControls: this.options.enableControls,
+                useBuiltInControls: true,
                 sharedMemoryForWorkers: false,
                 dynamicScene: false,
                 antialiased: false,
