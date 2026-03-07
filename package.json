@@ -1,15 +1,17 @@
 {
   "name": "@bengrande/parallax-photo",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Lightweight 3D Gaussian Splat viewer with parallax, head-tracking, and device motion support",
   "main": "splat-viewer.js",
   "module": "splat-viewer.js",
   "exports": {
     ".": "./splat-viewer.js",
+    "./esbuild-plugin": "./esbuild-plugin.js",
     "./workers/*": "./workers/*"
   },
   "files": [
     "splat-viewer.js",
+    "esbuild-plugin.js",
     "workers/"
   ],
   "repository": {

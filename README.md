@@ -193,6 +193,44 @@ document.addEventListener('mousemove', (e) => {
 });
 ```
 
+## Chrome Extension Support
+
+Chrome extensions block inline Blob workers and may capture keyboard events. This package includes an esbuild plugin that patches the underlying library for full compatibility.
+
+```javascript
+// esbuild.config.mjs
+import { chromeExtensionPlugin } from '@bengrande/parallax-photo/esbuild-plugin';
+
+esbuild.build({
+  // ...your config
+  plugins: [
+    chromeExtensionPlugin({
+      workerPath: 'lib/workers',        // where worker files are served from (default)
+      patchKeyboardHandlers: true,       // remove WASD/mouse handlers (default)
+    }),
+  ],
+});
+```
+
+You also need to copy the worker files to your extension and make them web-accessible:
+
+```bash
+cp node_modules/@bengrande/parallax-photo/workers/* lib/workers/
+```
+
+```json
+// manifest.json
+{
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'"
+  },
+  "web_accessible_resources": [{
+    "resources": ["lib/workers/*"],
+    "matches": ["<all_urls>"]
+  }]
+}
+```
+
 ## Generating PLY Files
 
 Use [Apple's SHARP](https://github.com/apple/ml-sharp) to generate 3D Gaussian Splats from a single photo:
