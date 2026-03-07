@@ -47,7 +47,7 @@ export class SplatViewer {
             perspectiveIntensity: 0.5,
             
             // Memory management
-            memoryThresholdMB: 512,
+            memoryThresholdMB: 1024,
             memoryCheckInterval: 2000,
             
             // Callbacks
