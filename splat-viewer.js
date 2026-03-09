@@ -42,9 +42,9 @@ export class SplatViewer {
             cameraPosition: [0, 0, 0],
             cameraLookAt: [0, 0, 50],
             cameraUp: [0, -1, 0],
-            fov: 48.5,
-            enableControls: true,
-            perspectiveIntensity: 0.5,
+            fov: 35,
+            enableControls: false,
+            perspectiveIntensity: 0.8,
             
             // Memory management
             memoryThresholdMB: 1024,
@@ -325,14 +325,16 @@ export class SplatViewer {
                 this._setupFallbackImage();
             }
             
-            // Create 3D viewer
+            // Create 3D viewer — always enable built-in controls initially
+            // so OrbitControls properly sets up the camera orientation,
+            // then disable them after start if the user doesn't want them.
             this.viewer = new GaussianSplats3D.Viewer({
                 rootElement: this.container,
                 cameraUp: this.options.cameraUp,
                 initialCameraPosition: this.options.cameraPosition,
                 initialCameraLookAt: this.options.cameraLookAt,
                 selfDrivenMode: true,
-                useBuiltInControls: this.options.enableControls,
+                useBuiltInControls: true,
                 sharedMemoryForWorkers: false,
                 dynamicScene: false,
                 antialiased: false,
@@ -359,6 +361,13 @@ export class SplatViewer {
             }
 
             this.viewer.start();
+
+            // If user wanted controls disabled, remove them now that
+            // the camera has been properly initialized by OrbitControls.
+            if (!this.options.enableControls) {
+                this.disableControls();
+            }
+
             this.isLoaded = true;
             this.isLoading = false;
             
